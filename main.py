@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import scipy.stats as stats
@@ -32,21 +33,29 @@ def calculate_age_statistics():
     var_age = df['age'].var()
     std_age = df['age'].std()
 
-    return mean_age, median_age, mode_age, range_age, var_age, std_age
+    print(
+        f"Estadísticas en base a la edad: \n"
+        f"Media: {mean_age}\n"
+        f"Mediana: {median_age}\n"
+        f"Moda: {mode_age}\n"
+        f"Rango: {range_age}\n"
+        f"Varianza: {var_age}\n"
+        f"Desviación estándar: {std_age}\n"
+    )
 
 
 # Calcula la tasa de supervivencia general.
 def calculate_survival_rate():
     s_rate = df['survived'].mean()
-    return s_rate
+    print(f"Tasa de supervivencia general: {s_rate}")
 
 
 # Calcula la tasa de supervivencia para ambos géneros.
 def calculate_survival_rate_by_gender():
-    survival_rate_male = df[df['gender'] == 'male']['survived'].mean()
-    survival_rate_female = df[df['gender'] == 'female']['survived'].mean()
-
-    return survival_rate_male, survival_rate_female
+    men_survival_rate = df[df['gender'] == 'male']['survived'].mean()
+    women_survival_rate = df[df['gender'] == 'female']['survived'].mean()
+    print(f"Tasa de supervivencia de hombres: {men_survival_rate}")
+    print(f"Tasa de supervivencia de mujeres: {women_survival_rate}")
 
 
 # Genera un histograma con las edades de los pasajeros por clase.
@@ -79,8 +88,18 @@ def make_box_plot():
     plt.show()
 
 
-# Crea un intervalo de confianza del 95% para la edad promedio de las
-# personas en el barco.
+# Propuesta de modelo de distribución para la edad ajustando a una de tipo
+# normal.
+def create_distribution_model():
+    mu, sigma = stats.norm.fit(df['age'])
+    print(f"\nParámetros estimados para una distribución normal: "
+          f"mu = {mu}, "
+          f"sigma = {sigma}"
+          )
+
+
+# Crea un intervalo de confianza del 95% para la edad promedio de las personas
+# en el barco.
 def create_confidence_interval():
     mean_age = df['age'].mean()
     std_err_age = stats.sem(df['age'])
@@ -92,42 +111,73 @@ def create_confidence_interval():
         scale=std_err_age
     )
 
-    return conf_inter
+    print(f"\nIntervalo de confianza del 95% para la edad promedio: "
+          f"{conf_inter[0]:5f}, {conf_inter[1]:5f}")
 
 
-# Realiza una prueba T para saber si la edad promedio de las mujeres
-# interesadas en abordar al Titanic es mayor a 56.
+# Realiza una prueba de hipótesis para mujeres con el objetivo de saber si el
+# promedio de edad es mayor a 56.
 def t_test_avg_women_age():
-    ttest_result_women = stats.ttest_1samp(
-        df[df['gender'] == 'female']['age'],
-        56
-    )
+    women_age = df[df['gender'] == 'female']['age']
+    t_stat, p_value = stats.ttest_1samp(women_age, 56)
 
-    return ttest_result_women
+    print(
+        f"\nResultado de la prueba T para mujeres: "
+        f"\nEstadístico T: {t_stat:.5f}\n"
+        f"Valor p: {p_value:.5e}"
+        )
 
 
-# Realiza una prueba T para saber si la edad promedio de los hombres
-# interesados en abordar al Titanic es mayor a 56.
+# Realiza una prueba de hipótesis para hombres con el objetivo de saber si el
+# promedio de edad es mayor a 56.
 def t_test_avg_men_age():
-    ttest_result_men = stats.ttest_1samp(df[df['gender'] == 'male']['age'], 56)
-    return ttest_result_men
+    men_age = df[df['gender'] == 'male']['age']
+    t_stat, p_value = stats.ttest_1samp(men_age, 56)
+
+    print(
+        f"\nResultado de la prueba T para hombres: "
+        f"\nEstadístico T: {t_stat:.5f}\n"
+        f"Valor p: {p_value:.5e}"
+        )
 
 
-# Calcula la diferencia entre las tasas de supervivencia de ambos géneros.
-def t_test_survival_rate_by_gender():
-    survival_rate_male = df[df['gender'] == 'male']['survived']
-    survival_rate_female = df[df['gender'] == 'female']['survived']
+# Calcula la diferencia entre las tasas de supervivencia de ambos géneros con
+# un intervalo de confianza del 99%.
+def survival_rate_difference():
+    survival_rates = df.groupby('gender')['survived'].mean()
 
-    ttest_gender_survival = stats.ttest_ind(
-        survival_rate_male,
-        survival_rate_female,
-        equal_var=False
+    n_male = len(df[df['gender'] == 'male'])
+    n_female = len(df[df['gender'] == 'female'])
+
+    # Calcula los errores estandar.
+    se_male = np.sqrt(
+        survival_rates['male'] * (1 - survival_rates['male']) / n_male
     )
 
-    return ttest_gender_survival
+    se_female = np.sqrt(
+        survival_rates['female'] * (1 - survival_rates['female']) / n_female)
+
+    # Calcula el intervalo de confianza para la diferencia de las tasas de
+    # supervivencia.
+    diff = survival_rates['female'] - survival_rates['male']
+
+    margin_of_error = (
+            stats.norm.ppf((1 + 0.99) / 2) *
+            np.sqrt(se_male ** 2 + se_female ** 2)
+    )
+
+    ci = (diff - margin_of_error, diff + margin_of_error)
+
+    print(
+        f"\nResultado de la diferencia entre las tasas de supervivencia por "
+        f"género con intervalo de confianza del 99%:\n"
+        f"Diferencia: {diff}\n"
+        f"Extremos del intervalo de confianza: {ci[0]:5f}, {ci[1]:5f}"
+    )
 
 
-# Calcula la diferencia entre las tasas de supervivencia de todas las clases.
+# Calcula la diferencia entre las tasas de supervivencia de todas las clases,
+# para ello se utiliza un Análisis de la Varianza (ANOVA).
 def anova_test_survival_rate_by_class():
     survival_rate_class1 = df[df['p_class'] == 1]['survived']
     survival_rate_class2 = df[df['p_class'] == 2]['survived']
@@ -139,101 +189,63 @@ def anova_test_survival_rate_by_class():
         survival_rate_class3
     )
 
-    return anova_result
+    print(
+        f"\nDiferencia entre las tasas de supervivencia de todas las clases:"
+        f"\nEstadístico F: {anova_result[0]:.5f}"
+        f"\nValor p: {anova_result[1]:.5e}"
+        )
 
 
 # Realiza una prueba T para comprobar si en promedio las mujeres tenían menos
 # edad que los hombres.
 def t_test_age_difference_by_gender():
-    ttest_age_diff = stats.ttest_ind(
-        df[df['gender'] == 'female']['age'],
-        df[df['gender'] == 'male']['age'],
-        equal_var=False
+    # Primero se filtran las edades por género.
+    ages_female = df[df['gender'] == 'female']['age']
+    ages_male = df[df['gender'] == 'male']['age']
+
+    # Se realiza una prueba T de dos muestras.
+    t_stat, p_value = stats.ttest_ind(ages_female, ages_male)
+
+    # Se calcula la diferencia de medias y desviación estándar de la
+    # diferencia.
+    mean_diff = np.mean(ages_female) - np.mean(ages_male)
+    std_diff = np.sqrt((np.var(ages_female) / len(ages_female)) +
+                       (np.var(ages_male) / len(ages_male)))
+
+    # Se calcula el intervalo de confianza del 95% para la diferencia de
+    # medias.
+    dof = len(ages_female) + len(ages_male) - 2  # Grados de libertad
+    margin_of_error = stats.t.ppf(0.975, dof) * std_diff
+    ci = (mean_diff - margin_of_error, mean_diff + margin_of_error)
+
+    # Imprimir resultados
+    print(
+        f"\nResultado de la prueba T para la diferencia en edad promedio "
+        f"entre mujeres y hombres:"
+        f"\nEstadístico T: {t_stat:.5f}"
+        f"\nValor p: {p_value:.5e}"
+        f"\nIntervalo de confianza del 95% para la diferencia de medias: "
+        f"{ci[0]:5f}, {ci[1]:5f}"
     )
-
-    return ttest_age_diff
-
-
-# Funcion para formatear un TResult de modo que sea más legible.
-def t_result_formatter(t_result):
-    formatted_result = (
-        f"\nEstadístico T: {t_result.statistic:.4f}\n"
-        f"Valor p: {t_result.pvalue:.4e}\n"
-        f"Grados de libertad: {t_result.df}\n"
-    )
-    return formatted_result
-
-
-def f_oneway_result_formatter(f_oneway_result):
-    formatted_result = (
-        f"\nEstadístico F: {f_oneway_result[0]:.4f}\n"
-        f"Valor p: {f_oneway_result[1]:.4e}\n"
-    )
-    return formatted_result
 
 
 def main():
+    # PARTE 1
     populate_age_column()
-
-    # Llamada a las funciones para obtener resultados
-    (mean_age,
-     median_age,
-     mode_age,
-     range_age,
-     var_age,
-     std_age) = calculate_age_statistics()
-
-    print(
-        f"Estadísticas en base a la edad: \n"
-        f"Media: {mean_age}\n"
-        f"Mediana: {median_age}\n"
-        f"Moda: {mode_age}\n"
-        f"Rango: {range_age}\n"
-        f"Varianza: {var_age}\n"
-        f"Desviación estándar: {std_age}\n"
-    )
-
-    general_survival_rate = calculate_survival_rate()
-    print(f"Tasa de supervivencia general: {general_survival_rate}")
-
-    survival_rate_by_gender = calculate_survival_rate_by_gender()
-    print(f"Tasa de supervivencia de hombres: {survival_rate_by_gender[0]}")
-    print(f"Tasa de supervivencia de mujeres: {survival_rate_by_gender[1]}")
-
+    calculate_age_statistics()
+    calculate_survival_rate()
+    calculate_survival_rate_by_gender()
     make_age_histogram_by_class()
     make_box_plot()
 
-    confidence_interval = create_confidence_interval()
-    print(
-        f"\nIntervalo de confianza del 95% para la edad promedio: "
-        f"{confidence_interval[0]:.5f}, {confidence_interval[1]:.5f}"
-    )
-
-    ttest_women = t_test_avg_women_age()
-    print(f"\nResultado de la prueba T para mujeres: "
-          f"{t_result_formatter(ttest_women)}")
-
-    ttest_men = t_test_avg_men_age()
-    print(f"Resultado de la prueba T para hombres: "
-          f"{t_result_formatter(ttest_men)}")
-
-    ttest_gender_survival = t_test_survival_rate_by_gender()
-    print(
-        f"Resultado de la prueba T para tasas de supervivencia por género: "
-        f"{t_result_formatter(ttest_gender_survival)}"
-    )
-
-    anova_class_survival = anova_test_survival_rate_by_class()
-    print(
-        f"Resultado de la prueba ANOVA para tasas de supervivencia por clase: "
-        f"{f_oneway_result_formatter(anova_class_survival)}"
-    )
-
-    ttest_age_diff = t_test_age_difference_by_gender()
-    print(
-        f"Resultado de la prueba T para diferencia de edad por género: "
-        f"{t_result_formatter(ttest_age_diff)}"
-    )
+    # PARTE 2
+    create_confidence_interval()
+    create_distribution_model()
+    t_test_avg_women_age()
+    t_test_avg_men_age()
+    survival_rate_difference()
+    anova_test_survival_rate_by_class()
+    t_test_age_difference_by_gender()
 
 
 if __name__ == "__main__":
